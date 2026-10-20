@@ -15,20 +15,32 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(AnvilMenu.class)
 public abstract class AnvilMenuMixin {
-    @Shadow private int cost;
-    @Shadow private net.minecraft.world.Container inputSlots;
-    @Shadow private net.minecraft.world.Container resultSlots;
+
+    @Shadow
+    private int cost;
+
+    @Shadow
+    private net.minecraft.world.Container inputSlots;
+
+    @Shadow
+    private net.minecraft.world.Container resultSlots;
 
     @Inject(method = "createResult", at = @At("TAIL"))
     private void keycardreader$requireKeyCardTag(CallbackInfo ci) {
         ItemStack input = inputSlots.getItem(0);
-        if (input.isEmpty() || !input.is(Items.PAPER)) return;
+
+        if (input.isEmpty() || !input.is(Items.PAPER)) {
+            return;
+        }
+
         CustomData custom = input.get(DataComponents.CUSTOM_DATA);
         boolean tagged = false;
+
         if (custom != null) {
             CompoundTag tag = custom.copyTag();
-            tagged = tag.getBoolean(KeycardReaderMod.CARD_TAG);
+            tagged = tag.getBoolean(KeycardReaderMod.CARD_TAG).orElse(false);
         }
+
         if (!tagged) {
             resultSlots.setItem(0, ItemStack.EMPTY);
             cost = 0;
