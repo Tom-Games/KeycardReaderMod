@@ -1,12 +1,18 @@
+
 plugins {
-    id 'net.fabricmc.fabric-loom' version '1.17-SNAPSHOT'
+    id 'fabric-loom' version '1.17-SNAPSHOT'
 }
 
 group = project.maven_group
 version = project.mod_version
-base { archivesName = project.archives_base_name }
 
-repositories { mavenCentral() }
+base {
+    archivesName = project.archives_base_name
+}
+
+repositories {
+    mavenCentral()
+}
 
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
@@ -15,11 +21,15 @@ dependencies {
 }
 
 java {
-    toolchain { languageVersion = JavaLanguageVersion.of(25) }
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
     withSourcesJar()
 }
 
 processResources {
     inputs.property 'version', project.version
-    filesMatching('fabric.mod.json') { expand 'version': project.version }
+    filesMatching('fabric.mod.json') {
+        expand 'version': project.version
+    }
 }
