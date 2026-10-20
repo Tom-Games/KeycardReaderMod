@@ -26,5 +26,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: keycard-reader-build
-          path: KeycardReaderMod_26.3/build/libs/*.jar
+          path: build/libs/*.jar
           if-no-files-found: warn
