@@ -47,12 +47,8 @@ public final class KeycardReaderRenderer
         if (!state.isReader) return;
 
         poseStack.pushPose();
-        // Block-entity render coordinates start at the block's lower corner. Move to the
-        // center because the face geometry below is expressed in -0.5..0.5 coordinates.
         poseStack.translate(0.5, 0.5, 0.5);
         queue.submitCustomGeometry(poseStack, FRONT_RENDER_TYPE, (pose, vertices) -> {
-            // Build the quad directly on the block's actual facing face. This avoids rotation
-            // winding/culling issues and prevents the image from appearing on a side face.
             switch (state.facing) {
                 case NORTH -> face(vertices, pose, -0.501f, 0, 0, -1);
                 case SOUTH -> face(vertices, pose, 0.501f, 0, 0, 1);
@@ -65,63 +61,57 @@ public final class KeycardReaderRenderer
         poseStack.popPose();
     }
 
-    /** Draw the reader texture on the selected face with an explicit outward normal. */
     private static void face(com.mojang.blaze3d.vertex.VertexConsumer out,
             PoseStack.Pose pose, float fixed, int nx, int ny, int nz) {
-        // For vertical (north/south) faces, fixed is Z; for east/west faces, fixed is X;
-        // for top/bottom faces, fixed is Y. Keep the image upright from outside each face.
         if (nz != 0) {
             float z = fixed;
             if (nz < 0) {
-                vertex(out, pose, -0.5f,  0.5f, z, 0, 0, nx, ny, nz);
-                vertex(out, pose,  0.5f,  0.5f, z, 1, 0, nx, ny, nz);
-                vertex(out, pose,  0.5f, -0.5f, z, 1, 1, nx, ny, nz);
-                vertex(out, pose, -0.5f, -0.5f, z, 0, 1, nx, ny, nz);
+                vertex(out, pose, -0.5f,  0.5f, z, 0, 0);
+                vertex(out, pose,  0.5f,  0.5f, z, 1, 0);
+                vertex(out, pose,  0.5f, -0.5f, z, 1, 1);
+                vertex(out, pose, -0.5f, -0.5f, z, 0, 1);
             } else {
-                vertex(out, pose,  0.5f,  0.5f, z, 0, 0, nx, ny, nz);
-                vertex(out, pose, -0.5f,  0.5f, z, 1, 0, nx, ny, nz);
-                vertex(out, pose, -0.5f, -0.5f, z, 1, 1, nx, ny, nz);
-                vertex(out, pose,  0.5f, -0.5f, z, 0, 1, nx, ny, nz);
+                vertex(out, pose,  0.5f,  0.5f, z, 0, 0);
+                vertex(out, pose, -0.5f,  0.5f, z, 1, 0);
+                vertex(out, pose, -0.5f, -0.5f, z, 1, 1);
+                vertex(out, pose,  0.5f, -0.5f, z, 0, 1);
             }
         } else if (nx != 0) {
             float x = fixed;
             if (nx > 0) {
-                vertex(out, pose, x, 0.5f, -0.5f, 0, 0, nx, ny, nz);
-                vertex(out, pose, x, 0.5f,  0.5f, 1, 0, nx, ny, nz);
-                vertex(out, pose, x, -0.5f, 0.5f, 1, 1, nx, ny, nz);
-                vertex(out, pose, x, -0.5f, -0.5f, 0, 1, nx, ny, nz);
+                vertex(out, pose, x, 0.5f, -0.5f, 0, 0);
+                vertex(out, pose, x, 0.5f,  0.5f, 1, 0);
+                vertex(out, pose, x, -0.5f,  0.5f, 1, 1);
+                vertex(out, pose, x, -0.5f, -0.5f, 0, 1);
             } else {
-                vertex(out, pose, x, 0.5f,  0.5f, 0, 0, nx, ny, nz);
-                vertex(out, pose, x, 0.5f, -0.5f, 1, 0, nx, ny, nz);
-                vertex(out, pose, x, -0.5f, -0.5f, 1, 1, nx, ny, nz);
-                vertex(out, pose, x, -0.5f,  0.5f, 0, 1, nx, ny, nz);
+                vertex(out, pose, x, 0.5f,  0.5f, 0, 0);
+                vertex(out, pose, x, 0.5f, -0.5f, 1, 0);
+                vertex(out, pose, x, -0.5f, -0.5f, 1, 1);
+                vertex(out, pose, x, -0.5f,  0.5f, 0, 1);
             }
         } else {
             float y = fixed;
             if (ny > 0) {
-                vertex(out, pose, -0.5f, y,  0.5f, 0, 0, nx, ny, nz);
-                vertex(out, pose,  0.5f, y,  0.5f, 1, 0, nx, ny, nz);
-                vertex(out, pose,  0.5f, y, -0.5f, 1, 1, nx, ny, nz);
-                vertex(out, pose, -0.5f, y, -0.5f, 0, 1, nx, ny, nz);
+                vertex(out, pose, -0.5f, y,  0.5f, 0, 0);
+                vertex(out, pose,  0.5f, y,  0.5f, 1, 0);
+                vertex(out, pose,  0.5f, y, -0.5f, 1, 1);
+                vertex(out, pose, -0.5f, y, -0.5f, 0, 1);
             } else {
-                vertex(out, pose, -0.5f, y, -0.5f, 0, 0, nx, ny, nz);
-                vertex(out, pose,  0.5f, y, -0.5f, 1, 0, nx, ny, nz);
-                vertex(out, pose,  0.5f, y,  0.5f, 1, 1, nx, ny, nz);
-                vertex(out, pose, -0.5f, y,  0.5f, 0, 1, nx, ny, nz);
+                vertex(out, pose, -0.5f, y, -0.5f, 0, 0);
+                vertex(out, pose,  0.5f, y, -0.5f, 1, 0);
+                vertex(out, pose,  0.5f, y,  0.5f, 1, 1);
+                vertex(out, pose, -0.5f, y,  0.5f, 0, 1);
             }
         }
     }
 
     private static void vertex(com.mojang.blaze3d.vertex.VertexConsumer out,
-            PoseStack.Pose pose, float x, float y, float z, float u, float v,
-            int nx, int ny, int nz) {
+            PoseStack.Pose pose, float x, float y, float z, float u, float v) {
         out.addVertex(pose, x, y, z)
                 .setColor(255, 255, 255, 255)
                 .setUv(u, v)
                 .setOverlay(0)
-                .setLight(0x00F000F0)
-                // The texture is an emissive, flat overlay. A zero normal prevents the
-                // entity shader's directional diffuse lighting from tinting the face.
-                .setNormal(pose, 0.0f, 0.0f, 0.0f);
+                .setLight(15728880) // Volles Licht (Fullbright), verhindert das Abdunkeln
+                .setNormal(pose, 0.0f, 1.0f, 0.0f);
     }
 }
