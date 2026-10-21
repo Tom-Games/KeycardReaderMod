@@ -19,7 +19,7 @@ public final class KeycardReaderRenderer
         implements BlockEntityRenderer<DropperBlockEntity, KeycardReaderRenderState> {
 
     private static final Identifier FRONT = Identifier.fromNamespaceAndPath(
-            "keycardreader", "textures/block/keycard_reader_front.png");
+        "keycardreader", "textures/block/keycard_reader_front.png");
     private static final RenderType FRONT_RENDER_TYPE = RenderTypes.entityCutout(FRONT);
     private static final String READER_NAME = "KeyCard einlegen";
 
