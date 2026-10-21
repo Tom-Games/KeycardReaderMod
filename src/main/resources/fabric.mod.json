@@ -4,7 +4,10 @@
   "version": "${version}",
   "name": "Keycard Reader & KeyCards",
   "description": "Keycard CIT textures, /cardify tag command, anvil rename restriction, and named dropper reader front.",
-  "authors": ["OpenAI"],
+  "authors": ["Titan44444"],
+  "contact": {},
+  "license": "All-Rights-Reserved",
+  "icon": "assets/keycardreader/icon.png",
   "environment": "*",
   "entrypoints": {
     "main": ["de.keycardreader.KeycardReaderMod"],

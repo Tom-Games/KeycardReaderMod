@@ -8,6 +8,7 @@ import net.minecraft.client.renderer.feature.ModelFeatureRenderer;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
+import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.DispenserBlock;
@@ -19,8 +20,8 @@ public final class KeycardReaderRenderer
         implements BlockEntityRenderer<DropperBlockEntity, KeycardReaderRenderState> {
 
     private static final Identifier FRONT = Identifier.fromNamespaceAndPath(
-        "keycardreader", "textures/block/keycard_reader_front.png");
-    private static final RenderType FRONT_RENDER_TYPE = RenderTypes.entityCutoutNoCull(FRONT);
+            "keycardreader", "textures/block/keycard_reader_front.png");
+    private static final RenderType FRONT_RENDER_TYPE = RenderTypes.entityTranslucent(FRONT);
     private static final String READER_NAME = "KeyCard einlegen";
 
     public KeycardReaderRenderer(BlockEntityRendererProvider.Context context) {}
@@ -118,7 +119,7 @@ public final class KeycardReaderRenderer
         out.addVertex(pose, x, y, z)
                 .setColor(255, 255, 255, 255)
                 .setUv(u, v)
-                .setOverlay(0)
+                .setOverlay(OverlayTexture.NO_OVERLAY) // 0 wäre die rote Treffer-Overlay-Zeile
                 .setLight(15728880) // Volles Licht, damit die Textur nicht vom Blockschatten verdunkelt wird
                 .setNormal(pose, nx, ny, nz);
     }
