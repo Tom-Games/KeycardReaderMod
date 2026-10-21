@@ -26,7 +26,7 @@ public final class KeycardReaderRenderer
     private static final RenderType FRONT_RENDER_TYPE =
             RenderTypes.entityCutout(FRONT);
 
-    private static final String READER_NAME = "Keycard-Reader";
+    private static final String READER_NAME = "KeyCard einlegen";
 
     public KeycardReaderRenderer(BlockEntityRendererProvider.Context context) {
     }
