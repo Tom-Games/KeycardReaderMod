@@ -6,7 +6,6 @@ import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
 import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
 import net.minecraft.client.renderer.feature.ModelFeatureRenderer;
 import net.minecraft.client.renderer.rendertype.RenderType;
-import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
@@ -20,7 +19,8 @@ public final class KeycardReaderRenderer
 
     private static final Identifier FRONT = Identifier.fromNamespaceAndPath(
             "keycardreader", "textures/block/keycard_reader_front.png");
-    private static final RenderType FRONT_RENDER_TYPE = RenderTypes.entityCutout(FRONT);
+    // RenderType.text verhindert jegliche ungewollte rötliche Tönung durch den Entity-Shader
+    private static final RenderType FRONT_RENDER_TYPE = RenderType.text(FRONT);
     private static final String READER_NAME = "KeyCard einlegen";
 
     public KeycardReaderRenderer(BlockEntityRendererProvider.Context context) {}
@@ -47,8 +47,11 @@ public final class KeycardReaderRenderer
         if (!state.isReader) return;
 
         poseStack.pushPose();
+        // Block-entity render coordinates start at the block's lower corner. Move to the
+        // center because the face geometry below is expressed in -0.5..0.5 coordinates.
         poseStack.translate(0.5, 0.5, 0.5);
         queue.submitCustomGeometry(poseStack, FRONT_RENDER_TYPE, (pose, vertices) -> {
+            // Build the quad directly on the block's actual facing face.
             switch (state.facing) {
                 case NORTH -> face(vertices, pose, -0.501f, 0, 0, -1);
                 case SOUTH -> face(vertices, pose, 0.501f, 0, 0, 1);
@@ -61,6 +64,7 @@ public final class KeycardReaderRenderer
         poseStack.popPose();
     }
 
+    /** Draw the reader texture on the selected face with an explicit outward normal. */
     private static void face(com.mojang.blaze3d.vertex.VertexConsumer out,
             PoseStack.Pose pose, float fixed, int nx, int ny, int nz) {
         if (nz != 0) {
@@ -111,7 +115,7 @@ public final class KeycardReaderRenderer
                 .setColor(255, 255, 255, 255)
                 .setUv(u, v)
                 .setOverlay(0)
-                .setLight(15728880) // Volles Licht (Fullbright), verhindert das Abdunkeln
+                .setLight(15728880) // Volles Licht (Fullbright)
                 .setNormal(pose, 0.0f, 1.0f, 0.0f);
     }
 }
