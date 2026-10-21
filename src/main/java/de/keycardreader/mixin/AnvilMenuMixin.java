@@ -1,3 +1,4 @@
+
 package de.keycardreader.mixin;
 
 import de.keycardreader.KeycardReaderMod;
@@ -15,9 +16,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(AnvilMenu.class)
 public abstract class AnvilMenuMixin {
-
-    @Shadow
-    private int cost;
 
     @Shadow
     private net.minecraft.world.Container inputSlots;
@@ -38,12 +36,11 @@ public abstract class AnvilMenuMixin {
 
         if (custom != null) {
             CompoundTag tag = custom.copyTag();
-            tagged = tag.getBoolean(KeycardReaderMod.CARD_TAG).orElse(false);
+            tagged = tag.getBoolean(KeycardReaderMod.CARD_TAG);
         }
 
         if (!tagged) {
             resultSlots.setItem(0, ItemStack.EMPTY);
-            cost = 0;
         }
     }
 }
