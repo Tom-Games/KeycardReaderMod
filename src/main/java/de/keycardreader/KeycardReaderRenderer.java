@@ -120,6 +120,8 @@ public final class KeycardReaderRenderer
                 .setUv(u, v)
                 .setOverlay(0)
                 .setLight(0x00F000F0)
-                .setNormal(pose, nx, ny, nz);
+                // The texture is an emissive, flat overlay. A zero normal prevents the
+                // entity shader's directional diffuse lighting from tinting the face.
+                .setNormal(pose, 0.0f, 0.0f, 0.0f);
     }
 }
