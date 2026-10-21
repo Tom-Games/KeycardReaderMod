@@ -1,7 +1,0 @@
-{
-  "required": true,
-  "package": "de.keycardreader.mixin",
-  "compatibilityLevel": "JAVA_25",
-  "mixins": ["AnvilMenuMixin"],
-  "injectors": { "defaultRequire": 1 }
-}
