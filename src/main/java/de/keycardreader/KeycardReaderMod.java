@@ -106,7 +106,7 @@ public final class KeycardReaderMod implements ModInitializer {
                     tag.remove(CARD_SERIAL_TAG);
                     if (tag.isEmpty()) stack.remove(DataComponents.CUSTOM_DATA);
                     else stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
-                    stack.set(DataComponents.ITEM_MODEL, Identifier.fromNamespaceAndPath("minecraft", "item/paper"));
+                    stack.set(DataComponents.ITEM_MODEL, Identifier.fromNamespaceAndPath("minecraft", "paper"));
                     stack.remove(DataComponents.CUSTOM_NAME);
                     player.sendSystemMessage(Component.literal("Keycard wurde wieder zu normalem Papier."));
                     return Command.SINGLE_SUCCESS;
