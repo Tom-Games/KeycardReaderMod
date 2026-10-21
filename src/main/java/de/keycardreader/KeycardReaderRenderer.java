@@ -28,7 +28,7 @@ public final class KeycardReaderRenderer
     // Rendert beide Seiten der Textur, damit sie nicht
     // wegen Backface-Culling unsichtbar wird.
     private static final RenderType FRONT_RENDER_TYPE =
-            RenderTypes.entityCutoutNoCull(FRONT);
+        RenderTypes.entityCutout(FRONT);
 
     private static final String READER_NAME = "KeyCard einlegen";
 
