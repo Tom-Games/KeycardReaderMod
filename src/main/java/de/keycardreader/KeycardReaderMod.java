@@ -16,7 +16,6 @@ import net.minecraft.nbt.CompoundTag;
 
 import java.util.Locale;
 import java.util.Map;
-import java.util.UUID;
 
 public final class KeycardReaderMod implements ModInitializer {
     /** Tag that selects the visual/model. */
@@ -66,27 +65,18 @@ public final class KeycardReaderMod implements ModInitializer {
                             }
 
                             int count = held.getCount();
-                            // A stack cannot contain individually identified cards. Convert each paper
-                            // into a separate one-item stack with a deterministic unique serial suffix.
-                            held.shrink(count);
-                            for (int i = 1; i <= count; i++) {
-                                String serial = serialPrefix + "-" + String.format(Locale.ROOT, "%03d", i)
-                                        + "-" + UUID.randomUUID().toString().replace("-", "").substring(0, 6).toUpperCase(Locale.ROOT);
-                                ItemStack card = new ItemStack(Items.PAPER);
-                                CompoundTag tag = new CompoundTag();
-                                tag.putString(CARD_TAG, code);
-                                tag.putString(CARD_SERIAL_TAG, serial);
-                                card.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
-                                card.set(DataComponents.ITEM_MODEL,
-                                        Identifier.fromNamespaceAndPath("keycardreader", model));
-                                if (!player.getInventory().add(card)) {
-                                    player.drop(card, false, null);
-                                }
-                            }
+                            // All cards from this command intentionally share the exact same special code.
+                            // Keep the existing stack intact so the whole paper stack becomes one stack
+                            // of identically identified keycards, rather than assigning generated IDs.
+                            CompoundTag tag = new CompoundTag();
+                            tag.putString(CARD_TAG, code);
+                            tag.putString(CARD_SERIAL_TAG, serialPrefix);
+                            held.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+                            held.set(DataComponents.ITEM_MODEL,
+                                    Identifier.fromNamespaceAndPath("keycardreader", model));
 
                             player.sendSystemMessage(Component.literal(count + " Keycard(s) erstellt: " + code
-                                    + " | Spezialcodes: " + serialPrefix + "-001 bis " + serialPrefix + "-"
-                                    + String.format(Locale.ROOT, "%03d", count) + " (jede Karte mit eindeutiger ID)"));
+                                    + " | Spezialcode für alle Karten: " + serialPrefix));
                             return Command.SINGLE_SUCCESS;
                         }))));
 

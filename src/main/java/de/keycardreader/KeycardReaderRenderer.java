@@ -47,6 +47,9 @@ public final class KeycardReaderRenderer
         if (!state.isReader) return;
 
         poseStack.pushPose();
+        // Block-entity render coordinates start at the block's lower corner. Move to the
+        // center because the face geometry below is expressed in -0.5..0.5 coordinates.
+        poseStack.translate(0.5, 0.5, 0.5);
         queue.submitCustomGeometry(poseStack, FRONT_RENDER_TYPE, (pose, vertices) -> {
             // Build the quad directly on the block's actual facing face. This avoids rotation
             // winding/culling issues and prevents the image from appearing on a side face.
