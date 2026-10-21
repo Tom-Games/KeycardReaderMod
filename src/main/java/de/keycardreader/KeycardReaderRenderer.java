@@ -1,3 +1,4 @@
+
 package de.keycardreader;
 
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -18,13 +19,16 @@ import org.jetbrains.annotations.Nullable;
 public final class KeycardReaderRenderer
         implements BlockEntityRenderer<DropperBlockEntity, KeycardReaderRenderState> {
 
-    private static final Identifier FRONT = Identifier.fromNamespaceAndPath(
-            "keycardreader",
-            "textures/block/keycard_reader_front.png"
-    );
+    private static final Identifier FRONT =
+            Identifier.fromNamespaceAndPath(
+                    "keycardreader",
+                    "textures/block/keycard_reader_front.png"
+            );
 
+    // Rendert beide Seiten der Textur, damit sie nicht
+    // wegen Backface-Culling unsichtbar wird.
     private static final RenderType FRONT_RENDER_TYPE =
-            RenderTypes.entityCutout(FRONT);
+            RenderTypes.entityCutoutNoCull(FRONT);
 
     private static final String READER_NAME = "KeyCard einlegen";
 
@@ -49,9 +53,12 @@ public final class KeycardReaderRenderer
         );
 
         state.isReader = blockEntity.getCustomName() != null
-                && READER_NAME.equals(blockEntity.getCustomName().getString());
+                && READER_NAME.equals(
+                        blockEntity.getCustomName().getString()
+                );
 
-        state.facing = blockEntity.getBlockState().getValue(DispenserBlock.FACING);
+        state.facing =
+                blockEntity.getBlockState().getValue(DispenserBlock.FACING);
     }
 
     @Override
@@ -84,10 +91,14 @@ public final class KeycardReaderRenderer
                 (pose, vertices) -> {
                     float z = -0.501f;
 
-                    vertex(vertices, pose, -0.5f,  0.5f, z, 0f, 0f, state.lightCoords);
-                    vertex(vertices, pose, -0.5f, -0.5f, z, 0f, 1f, state.lightCoords);
-                    vertex(vertices, pose,  0.5f, -0.5f, z, 1f, 1f, state.lightCoords);
-                    vertex(vertices, pose,  0.5f,  0.5f, z, 1f, 0f, state.lightCoords);
+                    vertex(vertices, pose,
+                            -0.5f, 0.5f, z, 0f, 0f, state.lightCoords);
+                    vertex(vertices, pose,
+                             0.5f, 0.5f, z, 1f, 0f, state.lightCoords);
+                    vertex(vertices, pose,
+                             0.5f, -0.5f, z, 1f, 1f, state.lightCoords);
+                    vertex(vertices, pose,
+                            -0.5f, -0.5f, z, 0f, 1f, state.lightCoords);
                 }
         );
 
