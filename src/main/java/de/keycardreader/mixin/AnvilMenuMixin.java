@@ -36,7 +36,7 @@ public abstract class AnvilMenuMixin {
 
         if (custom != null) {
             CompoundTag tag = custom.copyTag();
-            tagged = tag.getBoolean(KeycardReaderMod.CARD_TAG);
+            tagged = tag.getBoolean(KeycardReaderMod.CARD_TAG).orElse(false);
         }
 
         if (!tagged) {
