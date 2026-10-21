@@ -80,7 +80,7 @@ public final class KeycardReaderMod implements ModInitializer {
                                 card.set(DataComponents.ITEM_MODEL,
                                         Identifier.fromNamespaceAndPath("keycardreader", model));
                                 if (!player.getInventory().add(card)) {
-                                    player.getInventory().placeItemBackInInventory(card);
+                                    player.drop(card, false, null);
                                 }
                             }
 
