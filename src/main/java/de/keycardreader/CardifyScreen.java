@@ -134,9 +134,14 @@ public final class CardifyScreen extends Screen {
 
         hexBox = new EditBox(font, left, top + HEX_BOX_Y, 100, 20, Component.literal("Hex-Farbe"));
         hexBox.setMaxLength(7);
-        hexBox.setFilter(s -> s.matches("#?[0-9A-Fa-f]{0,6}"));
         hexBox.setValue(hexValue);
         hexBox.setResponder(v -> {
+            // Nur # und Hex-Zeichen zulassen (ersetzt den entfernten EditBox-Filter)
+            String cleaned = v.replaceAll("[^#0-9A-Fa-f]", "");
+            if (!cleaned.equals(v)) {
+                hexBox.setValue(cleaned); // ruft diesen Responder erneut mit bereinigtem Wert auf
+                return;
+            }
             hexValue = v;
             if (hexValid()) selCol = CUSTOM_COL; // gültiger Hex-Wert wählt automatisch "Eigene Farbe"
             updateCreateState();
