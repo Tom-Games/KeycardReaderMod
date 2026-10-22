@@ -1,12 +1,10 @@
 package de.keycardreader.mixin;
 
+import de.keycardreader.CardCodes;
 import de.keycardreader.KeycardReaderMod;
-import net.minecraft.ChatFormatting;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.Style;
-import net.minecraft.resources.Identifier;
 import net.minecraft.world.inventory.AnvilMenu;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -16,18 +14,8 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import java.util.Map;
-
 @Mixin(AnvilMenu.class)
 public abstract class AnvilMenuMixin {
-    private static final Map<Character, ChatFormatting> CARD_COLORS = Map.of(
-        'B', ChatFormatting.DARK_BLUE,
-        'G', ChatFormatting.DARK_GREEN,
-        'P', ChatFormatting.DARK_PURPLE,
-        'R', ChatFormatting.DARK_RED,
-        'Y', ChatFormatting.GOLD
-    );
-
     @Inject(method = "createResult", at = @At("TAIL"))
     private void keycardreader$validateAndColorKeycard(CallbackInfo ci) {
         AnvilMenu menu = (AnvilMenu) (Object) this;
@@ -51,7 +39,7 @@ public abstract class AnvilMenuMixin {
         }
 
         // Both values are mandatory: the model code chooses appearance; serial distinguishes copies.
-        if (code == null || !KeycardReaderMod.CARD_MODELS.containsKey(code)
+        if (code == null || !CardCodes.isValid(code)
                 || serial == null || serial.length() < 4 || serial.length() > 64
                 || !serial.matches("[A-Za-z0-9_-]+")) {
             menu.getSlot(2).set(ItemStack.EMPTY);
@@ -62,15 +50,11 @@ public abstract class AnvilMenuMixin {
         // Re-assert both model and full identity on the anvil result. CustomData differs between
         // cards with different serials, so Minecraft's normal stack comparison keeps them separate.
         result.set(DataComponents.CUSTOM_DATA, CustomData.of(protectedTag));
-        result.set(DataComponents.ITEM_MODEL,
-                Identifier.fromNamespaceAndPath("keycardreader", KeycardReaderMod.CARD_MODELS.get(code)));
+        CardCodes.applyVisual(result, code);
 
-        // Keep the chosen name but always force its color to match the card's final code letter.
-        char colorCode = code.charAt(code.length() - 1);
-        ChatFormatting color = CARD_COLORS.getOrDefault(colorCode, ChatFormatting.WHITE);
+        // Keep the chosen name but always force its color to match the card (preset color or hex color).
         Component currentName = result.get(DataComponents.CUSTOM_NAME);
         if (currentName == null) currentName = Component.literal(code);
-        result.set(DataComponents.CUSTOM_NAME,
-                currentName.copy().withStyle(Style.EMPTY.withColor(color)));
+        result.set(DataComponents.CUSTOM_NAME, currentName.copy().withStyle(CardCodes.nameStyle(code)));
     }
 }

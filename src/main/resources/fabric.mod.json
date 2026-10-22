@@ -3,7 +3,7 @@
   "id": "keycardreader",
   "version": "${version}",
   "name": "Keycard Reader & KeyCards",
-  "description": "Keycards with a /cardify creation menu, anvil rename protection, and a named dropper card reader that shows the required card.",
+  "description": "Keycards with a /cardify creation menu (preset or hex colours), anvil rename protection, and a named dropper card reader with status lamp, beep and required-card display.",
   "authors": ["Titan44444"],
   "contact": {},
   "license": "All-Rights-Reserved",

@@ -1,0 +1,7 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "keycardreader:item/kc-hex-b",
+    "layer1": "keycardreader:item/kc-hex-overlay"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "model": {
+    "type": "minecraft:model",
+    "model": "keycardreader:item/kc-hex-w",
+    "tints": [
+      { "type": "minecraft:constant", "value": 16777215 },
+      { "type": "minecraft:custom_model_data", "index": 0, "default": 8421504 }
+    ]
+  }
+}
