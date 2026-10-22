@@ -9,6 +9,7 @@ FEATURES
 - The anvil name color is forced to match the card's final color code: B = dark blue, G = dark green, P = dark purple, R = dark red, Y = gold/yellow.
 - Plain paper and cards missing a valid visual code or special code cannot be renamed into a valid card.
 - The dropper reader front uses full-bright vertex lighting so its texture is not darkened by surrounding block light.
+- Opening a named reader (dropper "KeyCard einlegen") shows the keycard(s) in the hopper directly below it in a small panel to the right of the inventory; hover an icon for the tooltip.
 
 USAGE
 1. Hold exactly one PAPER in your main hand.

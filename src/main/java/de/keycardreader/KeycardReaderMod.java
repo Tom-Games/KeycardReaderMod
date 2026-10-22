@@ -14,8 +14,26 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.CustomData;
 import net.minecraft.nbt.CompoundTag;
 
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.fabricmc.fabric.api.event.player.UseBlockCallback;
+import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.core.BlockPos;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.inventory.DispenserMenu;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.DropperBlockEntity;
+import net.minecraft.world.level.block.entity.HopperBlockEntity;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
 
 public final class KeycardReaderMod implements ModInitializer {
     /** Tag that selects the visual/model. */
@@ -32,8 +50,53 @@ public final class KeycardReaderMod implements ModInitializer {
         Map.entry("KC-W-R", "kc-w-r"), Map.entry("KC-W-Y", "kc-w-y")
     );
 
+    /** Name, den ein Dropper tragen muss, um als Reader zu gelten. */
+    public static final String READER_NAME = "KeyCard einlegen";
+
+    /** Spieler, die gerade einen Reader geöffnet haben (UUID -> Position des Droppers). */
+    private static final Map<UUID, BlockPos> OPEN_READERS = new HashMap<>();
+
     @Override
     public void onInitialize() {
+        PayloadTypeRegistry.clientboundPlay().register(ReaderPayload.TYPE, ReaderPayload.CODEC);
+
+        // Rechtsklick auf einen Dropper: Reader-Info sofort schicken (oder Anzeige ausblenden).
+        UseBlockCallback.EVENT.register((player, level, hand, hitResult) -> {
+            if (level.isClientSide() || !(player instanceof ServerPlayer sp)) return InteractionResult.PASS;
+            BlockPos pos = hitResult.getBlockPos();
+            if (level.getBlockEntity(pos) instanceof DropperBlockEntity dropper) {
+                if (isReader(dropper)) {
+                    OPEN_READERS.put(sp.getUUID(), pos);
+                    sendCards(sp, level, pos);
+                } else {
+                    OPEN_READERS.remove(sp.getUUID());
+                    ServerPlayNetworking.send(sp, new ReaderPayload(false, List.of()));
+                }
+            }
+            return InteractionResult.PASS;
+        });
+
+        // Solange das Reader-Menü offen ist, alle 10 Ticks aktualisieren (Karte rein/raus).
+        ServerTickEvents.END_SERVER_TICK.register(server -> {
+            if (server.getTickCount() % 10 != 0 || OPEN_READERS.isEmpty()) return;
+            Iterator<Map.Entry<UUID, BlockPos>> it = OPEN_READERS.entrySet().iterator();
+            while (it.hasNext()) {
+                Map.Entry<UUID, BlockPos> e = it.next();
+                ServerPlayer sp = server.getPlayerList().getPlayer(e.getKey());
+                if (sp == null || !(sp.containerMenu instanceof DispenserMenu)) {
+                    it.remove();
+                    continue;
+                }
+                Level level = sp.level();
+                if (!(level.getBlockEntity(e.getValue()) instanceof DropperBlockEntity d) || !isReader(d)) {
+                    it.remove();
+                    ServerPlayNetworking.send(sp, new ReaderPayload(false, List.of()));
+                    continue;
+                }
+                sendCards(sp, level, e.getValue());
+            }
+        });
+
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
             dispatcher.register(Commands.literal("cardify")
                 .then(Commands.argument("code", StringArgumentType.word())
@@ -114,4 +177,35 @@ public final class KeycardReaderMod implements ModInitializer {
         });
     }
 
+
+    private static boolean isReader(DropperBlockEntity dropper) {
+        return dropper.getCustomName() != null
+                && READER_NAME.equals(dropper.getCustomName().getString());
+    }
+
+    /** Sammelt alle gültigen Keycards (je Variante einmal) aus dem Trichter direkt unter dem Reader. */
+    private static void sendCards(ServerPlayer player, Level level, BlockPos readerPos) {
+        List<ItemStack> found = new ArrayList<>();
+        BlockEntity below = level.getBlockEntity(readerPos.below());
+        if (below instanceof HopperBlockEntity hopper) {
+            for (int i = 0; i < hopper.getContainerSize(); i++) {
+                ItemStack stack = hopper.getItem(i);
+                if (!isValidCard(stack)) continue;
+                boolean duplicate = false;
+                for (ItemStack other : found) {
+                    if (ItemStack.isSameItemSameComponents(other, stack)) { duplicate = true; break; }
+                }
+                if (!duplicate) found.add(stack.copyWithCount(1));
+            }
+        }
+        ServerPlayNetworking.send(player, new ReaderPayload(true, found));
+    }
+
+    private static boolean isValidCard(ItemStack stack) {
+        if (stack.isEmpty() || !stack.is(Items.PAPER)) return false;
+        CustomData custom = stack.get(DataComponents.CUSTOM_DATA);
+        if (custom == null) return false;
+        String code = custom.copyTag().getString(CARD_TAG).orElse("");
+        return CARD_MODELS.containsKey(code);
+    }
 }

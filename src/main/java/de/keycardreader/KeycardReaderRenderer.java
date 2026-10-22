@@ -22,7 +22,7 @@ public final class KeycardReaderRenderer
     private static final Identifier FRONT = Identifier.fromNamespaceAndPath(
             "keycardreader", "textures/block/keycard_reader_front.png");
     private static final RenderType FRONT_RENDER_TYPE = RenderTypes.entityTranslucent(FRONT);
-    private static final String READER_NAME = "KeyCard einlegen";
+    private static final String READER_NAME = KeycardReaderMod.READER_NAME;
 
     public KeycardReaderRenderer(BlockEntityRendererProvider.Context context) {}
 
