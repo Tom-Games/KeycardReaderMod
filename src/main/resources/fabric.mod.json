@@ -3,7 +3,7 @@
   "id": "keycardreader",
   "version": "${version}",
   "name": "Keycard Reader & KeyCards",
-  "description": "Keycard CIT textures, /cardify tag command, anvil rename restriction, and named dropper reader front.",
+  "description": "Keycards with a /cardify creation menu, anvil rename protection, and a named dropper card reader that shows the required card.",
   "authors": ["Titan44444"],
   "contact": {},
   "license": "All-Rights-Reserved",
