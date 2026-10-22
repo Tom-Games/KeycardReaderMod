@@ -107,7 +107,7 @@ public final class CardifyScreen extends Screen {
                 .bounds(left, top + 164, 88, 20).build();
         addRenderableWidget(createButton);
         addRenderableWidget(Button.builder(Component.literal("Abbrechen"),
-                        b -> Minecraft.getInstance().setScreen(null))
+                        b -> onClose())
                 .bounds(left + 92, top + 164, 88, 20).build());
         updateCreateState();
     }
@@ -122,7 +122,7 @@ public final class CardifyScreen extends Screen {
     private void submit() {
         if (!serialValid(serialValue)) return;
         ClientPlayNetworking.send(new CardifyRequestPayload(selectedCode, nameValue, serialValue));
-        Minecraft.getInstance().setScreen(null);
+        onClose();
     }
 
     private void drawOverlay(GuiGraphicsExtractor g) {
