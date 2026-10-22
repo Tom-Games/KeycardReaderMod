@@ -1,25 +1,27 @@
 package de.keycardreader;
 
 import com.mojang.brigadier.Command;
+import com.mojang.brigadier.arguments.StringArgumentType;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.minecraft.commands.Commands;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.component.CustomData;
+import net.minecraft.nbt.CompoundTag;
+
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
-import net.minecraft.ChatFormatting;
-import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.component.DataComponents;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
-import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.inventory.DispenserMenu;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
-import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.DropperBlockEntity;
@@ -39,9 +41,6 @@ public final class KeycardReaderMod implements ModInitializer {
     /** Per-card identity. Different values prevent otherwise identical cards from stacking. */
     public static final String CARD_SERIAL_TAG = "KeyCardSerial";
 
-    /** Name, den ein Dropper tragen muss, um als Reader zu gelten. */
-    public static final String READER_NAME = "KeyCard einlegen";
-
     // Codes are deliberately whitelisted: arbitrary strings never select models.
     public static final Map<String, String> CARD_MODELS = Map.ofEntries(
         Map.entry("KC-B-B", "kc-b-b"), Map.entry("KC-B-G", "kc-b-g"),
@@ -51,19 +50,15 @@ public final class KeycardReaderMod implements ModInitializer {
         Map.entry("KC-W-R", "kc-w-r"), Map.entry("KC-W-Y", "kc-w-y")
     );
 
+    /** Name, den ein Dropper tragen muss, um als Reader zu gelten. */
+    public static final String READER_NAME = "KeyCard einlegen";
+
     /** Spieler, die gerade einen Reader geöffnet haben (UUID -> Position des Droppers). */
     private static final Map<UUID, BlockPos> OPEN_READERS = new HashMap<>();
 
     @Override
     public void onInitialize() {
         PayloadTypeRegistry.clientboundPlay().register(ReaderPayload.TYPE, ReaderPayload.CODEC);
-        PayloadTypeRegistry.clientboundPlay().register(OpenCardifyPayload.TYPE, OpenCardifyPayload.CODEC);
-        PayloadTypeRegistry.serverboundPlay().register(CardifyRequestPayload.TYPE, CardifyRequestPayload.CODEC);
-
-        // Auswahl aus dem /cardify-Menü
-        ServerPlayNetworking.registerGlobalReceiver(CardifyRequestPayload.TYPE,
-                (payload, context) -> createCard(context.player(),
-                        payload.code(), payload.name(), payload.serial()));
 
         // Rechtsklick auf einen Dropper: Reader-Info sofort schicken (oder Anzeige ausblenden).
         UseBlockCallback.EVENT.register((player, level, hand, hitResult) -> {
@@ -103,21 +98,50 @@ public final class KeycardReaderMod implements ModInitializer {
         });
 
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
-            // /cardify öffnet nur das Menü; die Karte entsteht erst nach "Erstellen".
             dispatcher.register(Commands.literal("cardify")
-                .executes(context -> {
-                    if (!(context.getSource().getEntity() instanceof ServerPlayer player)) {
-                        context.getSource().sendFailure(Component.literal("Dieser Befehl kann nur ein Spieler benutzen."));
-                        return 0;
-                    }
-                    ItemStack held = player.getMainHandItem();
-                    if (held.isEmpty() || !held.is(Items.PAPER)) {
-                        player.sendSystemMessage(Component.literal("Halte Papier in der Haupthand, bevor du /cardify benutzt."));
-                        return 0;
-                    }
-                    ServerPlayNetworking.send(player, OpenCardifyPayload.INSTANCE);
-                    return Command.SINGLE_SUCCESS;
-                }));
+                .then(Commands.argument("code", StringArgumentType.word())
+                    .then(Commands.argument("specialcode", StringArgumentType.word())
+                        .executes(context -> {
+                            if (!(context.getSource().getEntity() instanceof ServerPlayer player)) {
+                                context.getSource().sendFailure(Component.literal("Dieser Befehl kann nur ein Spieler benutzen."));
+                                return 0;
+                            }
+
+                            ItemStack held = player.getMainHandItem();
+                            if (held.isEmpty() || !held.is(Items.PAPER)) {
+                                player.sendSystemMessage(Component.literal("Halte Papier in der Haupthand, bevor du /cardify benutzt."));
+                                return 0;
+                            }
+
+                            String code = StringArgumentType.getString(context, "code").toUpperCase(Locale.ROOT);
+                            String model = CARD_MODELS.get(code);
+                            if (model == null) {
+                                player.sendSystemMessage(Component.literal("Ungültiger Kartencode. Erlaubt sind KC-B-B, KC-B-G, KC-B-P, KC-B-R, KC-B-Y, KC-W-B, KC-W-G, KC-W-P, KC-W-R und KC-W-Y."));
+                                return 0;
+                            }
+
+                            String serialPrefix = StringArgumentType.getString(context, "specialcode");
+                            if (serialPrefix.length() < 4 || serialPrefix.length() > 51
+                                    || !serialPrefix.matches("[A-Za-z0-9_-]+")) {
+                                player.sendSystemMessage(Component.literal("Der Spezialcode muss 4–51 Zeichen lang sein und darf nur Buchstaben, Zahlen, _ oder - enthalten."));
+                                return 0;
+                            }
+
+                            int count = held.getCount();
+                            // All cards from this command intentionally share the exact same special code.
+                            // Keep the existing stack intact so the whole paper stack becomes one stack
+                            // of identically identified keycards, rather than assigning generated IDs.
+                            CompoundTag tag = new CompoundTag();
+                            tag.putString(CARD_TAG, code);
+                            tag.putString(CARD_SERIAL_TAG, serialPrefix);
+                            held.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+                            held.set(DataComponents.ITEM_MODEL,
+                                    Identifier.fromNamespaceAndPath("keycardreader", model));
+
+                            player.sendSystemMessage(Component.literal(count + " Keycard(s) erstellt: " + code
+                                    + " | Spezialcode für alle Karten: " + serialPrefix));
+                            return Command.SINGLE_SUCCESS;
+                        }))));
 
             dispatcher.register(Commands.literal("discardify")
                 .executes(context -> {
@@ -153,51 +177,6 @@ public final class KeycardReaderMod implements ModInitializer {
         });
     }
 
-    /** Wendet die Menü-Auswahl auf das Papier in der Haupthand an (alles wird serverseitig geprüft). */
-    private static void createCard(ServerPlayer player, String code, String name, String serial) {
-        ItemStack held = player.getMainHandItem();
-        if (held.isEmpty() || !held.is(Items.PAPER)) {
-            player.sendSystemMessage(Component.literal("Halte Papier in der Haupthand, um eine Keycard zu erstellen."));
-            return;
-        }
-        code = code.toUpperCase(Locale.ROOT);
-        String model = CARD_MODELS.get(code);
-        if (model == null) {
-            player.sendSystemMessage(Component.literal("Ungültiger Kartencode."));
-            return;
-        }
-        if (serial.length() < 4 || serial.length() > 51 || !serial.matches("[A-Za-z0-9_-]+")) {
-            player.sendSystemMessage(Component.literal("Der Spezialcode muss 4–51 Zeichen lang sein und darf nur Buchstaben, Zahlen, _ oder - enthalten."));
-            return;
-        }
-        name = name.trim();
-        if (name.isEmpty()) name = code;
-        if (name.length() > 50) name = name.substring(0, 50);
-
-        int count = held.getCount();
-        // Der ganze Papierstapel wird zu einem Stapel identischer Karten (gleicher Spezialcode).
-        CompoundTag tag = new CompoundTag();
-        tag.putString(CARD_TAG, code);
-        tag.putString(CARD_SERIAL_TAG, serial);
-        held.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
-        held.set(DataComponents.ITEM_MODEL, Identifier.fromNamespaceAndPath("keycardreader", model));
-        held.set(DataComponents.CUSTOM_NAME, Component.literal(name).withStyle(colorFor(code)));
-
-        player.sendSystemMessage(Component.literal(count + " Keycard(s) erstellt: " + name + " (" + code
-                + ") | Spezialcode: " + serial));
-    }
-
-    /** Namensfarbe passend zum letzten Buchstaben des Codes (B/G/P/R/Y). */
-    public static ChatFormatting colorFor(String code) {
-        return switch (code.charAt(code.length() - 1)) {
-            case 'B' -> ChatFormatting.DARK_BLUE;
-            case 'G' -> ChatFormatting.DARK_GREEN;
-            case 'P' -> ChatFormatting.DARK_PURPLE;
-            case 'R' -> ChatFormatting.DARK_RED;
-            case 'Y' -> ChatFormatting.GOLD;
-            default -> ChatFormatting.WHITE;
-        };
-    }
 
     private static boolean isReader(DropperBlockEntity dropper) {
         return dropper.getCustomName() != null
@@ -211,30 +190,22 @@ public final class KeycardReaderMod implements ModInitializer {
         if (below instanceof HopperBlockEntity hopper) {
             for (int i = 0; i < hopper.getContainerSize(); i++) {
                 ItemStack stack = hopper.getItem(i);
-                String code = codeOf(stack);
-                if (code == null) continue;
+                if (!isValidCard(stack)) continue;
                 boolean duplicate = false;
                 for (ItemStack other : found) {
                     if (ItemStack.isSameItemSameComponents(other, stack)) { duplicate = true; break; }
                 }
-                if (duplicate) continue;
-                ItemStack copy = stack.copyWithCount(1);
-                // Ohne eigenen Namen würde der Tooltip nur "Papier" zeigen -> Code als Namen setzen.
-                if (copy.get(DataComponents.CUSTOM_NAME) == null) {
-                    copy.set(DataComponents.CUSTOM_NAME, Component.literal(code).withStyle(colorFor(code)));
-                }
-                found.add(copy);
+                if (!duplicate) found.add(stack.copyWithCount(1));
             }
         }
         ServerPlayNetworking.send(player, new ReaderPayload(true, found));
     }
 
-    /** Liefert den Kartencode, falls der Stack eine gültige Keycard ist, sonst null. */
-    private static String codeOf(ItemStack stack) {
-        if (stack.isEmpty() || !stack.is(Items.PAPER)) return null;
+    private static boolean isValidCard(ItemStack stack) {
+        if (stack.isEmpty() || !stack.is(Items.PAPER)) return false;
         CustomData custom = stack.get(DataComponents.CUSTOM_DATA);
-        if (custom == null) return null;
+        if (custom == null) return false;
         String code = custom.copyTag().getString(CARD_TAG).orElse("");
-        return CARD_MODELS.containsKey(code) ? code : null;
+        return CARD_MODELS.containsKey(code);
     }
 }

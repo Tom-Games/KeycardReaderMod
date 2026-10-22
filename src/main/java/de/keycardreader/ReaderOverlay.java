@@ -15,7 +15,6 @@ public final class ReaderOverlay {
     private static final int GUI_WIDTH = 176;   // Breite des Dispenser/Dropper-Menüs
     private static final int GUI_HEIGHT = 166;
     private static final long MAX_AGE_MS = 2500; // Server sendet alle ~0,5 s neu
-    private static final int PAD = 4;
 
     private static boolean active = false;
     private static List<ItemStack> cards = List.of();
@@ -41,39 +40,34 @@ public final class ReaderOverlay {
         if (!active || System.currentTimeMillis() - lastUpdate > MAX_AGE_MS) return;
 
         Font font = Minecraft.getInstance().font;
-        String title = "Benötigte KeyCard";
+        String title = "Karte im Trichter";
         int slots = Math.max(1, cards.size());
-        int titleW = font.width(title);
-        int panelW = Math.max(titleW, slots * 18) + PAD * 2;
-        int panelH = PAD + font.lineHeight + 3 + 18 + PAD;
+        int panelW = Math.max(font.width(title), slots * 18) + 12;
+        int panelH = 12 + font.lineHeight + 4 + 18 + 6;
 
-        int x0 = (screen.width + GUI_WIDTH) / 2 + 2;
+        int x0 = (screen.width + GUI_WIDTH) / 2 + 6;
         int y0 = (screen.height - GUI_HEIGHT) / 2;
 
         // Hintergrund + Rahmen
         g.fill(x0 - 1, y0 - 1, x0 + panelW + 1, y0 + panelH + 1, 0xFF000000);
         g.fill(x0, y0, x0 + panelW, y0 + panelH, 0xFFC6C6C6);
-        // Titel mittig
-        g.text(font, title, x0 + (panelW - titleW) / 2, y0 + PAD, 0xFF404040, false);
+        g.text(font, title, x0 + 6, y0 + 6, 0xFF404040, false);
 
-        int sy = y0 + PAD + font.lineHeight + 3;
+        int sy = y0 + 6 + font.lineHeight + 4;
         if (cards.isEmpty()) {
-            String none = "keine";
-            g.text(font, none, x0 + (panelW - font.width(none)) / 2, sy + 5, 0xFF707070, false);
+            g.text(font, "keine", x0 + 6, sy + 5, 0xFF707070, false);
             return;
         }
 
-        // Slots als Gruppe mittig unter dem Titel
-        int startX = x0 + (panelW - cards.size() * 18) / 2 + 1;
         ItemStack hovered = null;
         for (int i = 0; i < cards.size(); i++) {
-            int sx = startX + i * 18;
+            int sx = x0 + 6 + i * 18;
             ItemStack stack = cards.get(i);
-            g.fill(sx - 1, sy, sx + 17, sy + 18, 0xFF8B8B8B); // Slot-Look
-            g.fill(sx, sy + 1, sx + 16, sy + 17, 0xFF373737);
-            g.item(stack, sx, sy + 1);
-            if (mouseX >= sx && mouseX < sx + 16 && mouseY >= sy + 1 && mouseY < sy + 17) {
-                g.fill(sx, sy + 1, sx + 16, sy + 17, 0x80FFFFFF);
+            g.fill(sx - 1, sy - 1, sx + 17, sy + 17, 0xFF8B8B8B); // Slot-Look
+            g.fill(sx, sy, sx + 16, sy + 16, 0xFF373737);
+            g.item(stack, sx, sy);
+            if (mouseX >= sx && mouseX < sx + 16 && mouseY >= sy && mouseY < sy + 16) {
+                g.fill(sx, sy, sx + 16, sy + 16, 0x80FFFFFF);
                 hovered = stack;
             }
         }
