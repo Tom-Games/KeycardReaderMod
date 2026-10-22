@@ -1,7 +1,7 @@
 KEYCARD READER + KEYCARDS — SOURCE PROJECT
 
 FEATURES
-- /cardify <CODE> <SPECIALCODE> converts exactly one PAPER in your main hand into a keycard.
+- /cardify opens a menu (card name, colour by clicking a card icon, special code). Confirming converts the PAPER in your main hand into a keycard.
 - KeyCard stores the visual code and selects one of the ten whitelisted item models.
 - KeyCardSerial stores a per-card special code. Different serials are different item components, so cards with different special codes do not stack even when their display names and textures match.
 - The command requires exactly one paper item, preventing an entire paper stack from accidentally receiving one shared identity.
@@ -12,14 +12,10 @@ FEATURES
 - Opening a named reader (dropper "KeyCard einlegen") shows the keycard(s) in the hopper directly below it in a small panel to the right of the inventory; hover an icon for the tooltip.
 
 USAGE
-1. Hold exactly one PAPER in your main hand.
-2. Enter a visual code plus a unique special code, for example:
-   /cardify KC-B-P VaultCard_0001
-   /cardify KC-B-P VaultCard_0002
-   /cardify KC-W-B StaffCard_0001
-3. Supported visual codes: KC-B-B, KC-B-G, KC-B-P, KC-B-R, KC-B-Y, KC-W-B, KC-W-G, KC-W-P, KC-W-R, KC-W-Y.
-4. The special code must be 4–64 characters and contain only letters, numbers, underscores or hyphens. Use a different special code for every physical card that must not stack with another.
-5. Rename the card in an anvil if desired. Its texture still comes from the visual code, not the display name; the name color is forced to match the card.
+1. Hold PAPER in your main hand and run /cardify.
+2. In the menu enter a card name (optional, defaults to the code), click the card colour you want and enter a unique special code (4-51 characters: letters, numbers, _ or -).
+3. Click "Erstellen". Codes: KC-<Black|White>-<Blue|Green|Yellow|Red|Purple>, e.g. KC-B-P = black/purple.
+4. Rename the card in an anvil if desired. Its texture still comes from the code; the name colour is forced to match the card.
 
 STACKING / SECURITY NOTES
 Minecraft compares item components when deciding whether items can stack. Since KeyCardSerial is stored in CustomData, cards with different special codes do not stack, regardless of display name. If two cards have the same visual code AND the same special code, Minecraft may stack them; therefore issue a unique special code per card.
