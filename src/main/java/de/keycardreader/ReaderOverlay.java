@@ -3,7 +3,7 @@ package de.keycardreader;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.DispenserScreen;
 import net.minecraft.world.item.ItemStack;
@@ -31,12 +31,12 @@ public final class ReaderOverlay {
     public static void register() {
         ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
             if (screen instanceof DispenserScreen) {
-                ScreenEvents.afterRender(screen).register(ReaderOverlay::render);
+                ScreenEvents.afterExtract(screen).register(ReaderOverlay::render);
             }
         });
     }
 
-    private static void render(Screen screen, GuiGraphics g, int mouseX, int mouseY, float delta) {
+    private static void render(Screen screen, GuiGraphicsExtractor g, int mouseX, int mouseY, float delta) {
         if (!active || System.currentTimeMillis() - lastUpdate > MAX_AGE_MS) return;
 
         Font font = Minecraft.getInstance().font;
@@ -51,11 +51,11 @@ public final class ReaderOverlay {
         // Hintergrund + Rahmen
         g.fill(x0 - 1, y0 - 1, x0 + panelW + 1, y0 + panelH + 1, 0xFF000000);
         g.fill(x0, y0, x0 + panelW, y0 + panelH, 0xFFC6C6C6);
-        g.drawString(font, title, x0 + 6, y0 + 6, 0xFF404040, false);
+        g.text(font, title, x0 + 6, y0 + 6, 0xFF404040, false);
 
         int sy = y0 + 6 + font.lineHeight + 4;
         if (cards.isEmpty()) {
-            g.drawString(font, "keine", x0 + 6, sy + 5, 0xFF707070, false);
+            g.text(font, "keine", x0 + 6, sy + 5, 0xFF707070, false);
             return;
         }
 
@@ -65,7 +65,7 @@ public final class ReaderOverlay {
             ItemStack stack = cards.get(i);
             g.fill(sx - 1, sy - 1, sx + 17, sy + 17, 0xFF8B8B8B); // Slot-Look
             g.fill(sx, sy, sx + 16, sy + 16, 0xFF373737);
-            g.renderItem(stack, sx, sy);
+            g.item(stack, sx, sy);
             if (mouseX >= sx && mouseX < sx + 16 && mouseY >= sy && mouseY < sy + 16) {
                 g.fill(sx, sy, sx + 16, sy + 16, 0x80FFFFFF);
                 hovered = stack;
