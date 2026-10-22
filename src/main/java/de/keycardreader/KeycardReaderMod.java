@@ -7,17 +7,14 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.ChatFormatting;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
-import net.minecraft.resources.ResourceKey;
-import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.sounds.SoundEvent;
-import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.inventory.DispenserMenu;
 import net.minecraft.world.item.ItemStack;
@@ -27,18 +24,13 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.DropperBlockEntity;
 import net.minecraft.world.level.block.entity.HopperBlockEntity;
-import net.minecraft.world.level.chunk.LevelChunk;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
 public final class KeycardReaderMod implements ModInitializer {
@@ -47,32 +39,24 @@ public final class KeycardReaderMod implements ModInitializer {
     /** Per-card identity. Different values prevent otherwise identical cards from stacking. */
     public static final String CARD_SERIAL_TAG = "KeyCardSerial";
 
-    /** Preset-Codes (Hex-Codes prüft {@link CardCodes}). */
-    public static final Map<String, String> CARD_MODELS = CardCodes.PRESET_MODELS;
+    /** Name, den ein Dropper tragen muss, um als Reader zu gelten. */
+    public static final String READER_NAME = "KeyCard einlegen";
 
-    /** Wie weit (in Chunks) um jeden Spieler Reader gesucht und synchronisiert werden. */
-    private static final int SCAN_RADIUS_CHUNKS = 4;
-
-    private static final SoundEvent BEEP = SoundEvent.createVariableRangeEvent(
-            Identifier.fromNamespaceAndPath("minecraft", "block.note_block.pling"));
+    // Codes are deliberately whitelisted: arbitrary strings never select models.
+    public static final Map<String, String> CARD_MODELS = Map.ofEntries(
+        Map.entry("KC-B-B", "kc-b-b"), Map.entry("KC-B-G", "kc-b-g"),
+        Map.entry("KC-B-P", "kc-b-p"), Map.entry("KC-B-R", "kc-b-r"),
+        Map.entry("KC-B-Y", "kc-b-y"), Map.entry("KC-W-B", "kc-w-b"),
+        Map.entry("KC-W-G", "kc-w-g"), Map.entry("KC-W-P", "kc-w-p"),
+        Map.entry("KC-W-R", "kc-w-r"), Map.entry("KC-W-Y", "kc-w-y")
+    );
 
     /** Spieler, die gerade einen Reader geöffnet haben (UUID -> Position des Droppers). */
     private static final Map<UUID, BlockPos> OPEN_READERS = new HashMap<>();
 
-    /** Zuletzt an den Spieler geschickte Reader-Liste (um nur bei Änderung zu senden). */
-    private static final Map<UUID, List<ReaderStatusPayload.Entry>> LAST_SENT = new HashMap<>();
-    /** Zuletzt bekannter Zustand "liegt eine Karte im Trichter?" pro Reader (für den Piepton). */
-    private static final Map<ReaderKey, Boolean> LAST_HAS_CARD = new HashMap<>();
-
-    private record ReaderKey(ResourceKey<Level> dimension, long pos) {}
-    private record Scanned(Level level, ReaderStatusPayload.Entry entry) {}
-
     @Override
     public void onInitialize() {
-        ReaderConfig.load();
-
         PayloadTypeRegistry.clientboundPlay().register(ReaderPayload.TYPE, ReaderPayload.CODEC);
-        PayloadTypeRegistry.clientboundPlay().register(ReaderStatusPayload.TYPE, ReaderStatusPayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(OpenCardifyPayload.TYPE, OpenCardifyPayload.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(CardifyRequestPayload.TYPE, CardifyRequestPayload.CODEC);
 
@@ -97,10 +81,25 @@ public final class KeycardReaderMod implements ModInitializer {
             return InteractionResult.PASS;
         });
 
+        // Solange das Reader-Menü offen ist, alle 10 Ticks aktualisieren (Karte rein/raus).
         ServerTickEvents.END_SERVER_TICK.register(server -> {
-            int tick = server.getTickCount();
-            if (tick % 10 == 0) updateOpenReaders(server);   // Menü-Anzeige alle 0,5 s
-            if (tick % 10 == 5) scanReaders(server, tick);    // Lampe/Karten außen + Piepton
+            if (server.getTickCount() % 10 != 0 || OPEN_READERS.isEmpty()) return;
+            Iterator<Map.Entry<UUID, BlockPos>> it = OPEN_READERS.entrySet().iterator();
+            while (it.hasNext()) {
+                Map.Entry<UUID, BlockPos> e = it.next();
+                ServerPlayer sp = server.getPlayerList().getPlayer(e.getKey());
+                if (sp == null || !(sp.containerMenu instanceof DispenserMenu)) {
+                    it.remove();
+                    continue;
+                }
+                Level level = sp.level();
+                if (!(level.getBlockEntity(e.getValue()) instanceof DropperBlockEntity d) || !isReader(d)) {
+                    it.remove();
+                    ServerPlayNetworking.send(sp, new ReaderPayload(false, List.of()));
+                    continue;
+                }
+                sendCards(sp, level, e.getValue());
+            }
         });
 
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
@@ -187,32 +186,21 @@ public final class KeycardReaderMod implements ModInitializer {
                 + ") | Spezialcode: " + serial));
     }
 
-    private static boolean isReader(DropperBlockEntity dropper) {
-        return dropper.getCustomName() != null
-                && ReaderConfig.isReaderName(dropper.getCustomName().getString());
+    /** Namensfarbe passend zum letzten Buchstaben des Codes (B/G/P/R/Y). */
+    public static ChatFormatting colorFor(String code) {
+        return switch (code.charAt(code.length() - 1)) {
+            case 'B' -> ChatFormatting.DARK_BLUE;
+            case 'G' -> ChatFormatting.DARK_GREEN;
+            case 'P' -> ChatFormatting.DARK_PURPLE;
+            case 'R' -> ChatFormatting.DARK_RED;
+            case 'Y' -> ChatFormatting.GOLD;
+            default -> ChatFormatting.WHITE;
+        };
     }
 
-    // ------------------------------------------------------------------ Menü-Anzeige
-
-    /** Solange das Reader-Menü offen ist, regelmäßig aktualisieren (Karte rein/raus). */
-    private static void updateOpenReaders(MinecraftServer server) {
-        if (OPEN_READERS.isEmpty()) return;
-        Iterator<Map.Entry<UUID, BlockPos>> it = OPEN_READERS.entrySet().iterator();
-        while (it.hasNext()) {
-            Map.Entry<UUID, BlockPos> e = it.next();
-            ServerPlayer sp = server.getPlayerList().getPlayer(e.getKey());
-            if (sp == null || !(sp.containerMenu instanceof DispenserMenu)) {
-                it.remove();
-                continue;
-            }
-            Level level = sp.level();
-            if (!(level.getBlockEntity(e.getValue()) instanceof DropperBlockEntity d) || !isReader(d)) {
-                it.remove();
-                ServerPlayNetworking.send(sp, new ReaderPayload(false, List.of()));
-                continue;
-            }
-            sendCards(sp, level, e.getValue());
-        }
+    private static boolean isReader(DropperBlockEntity dropper) {
+        return dropper.getCustomName() != null
+                && READER_NAME.equals(dropper.getCustomName().getString());
     }
 
     /** Sammelt alle gültigen Keycards (je Variante einmal) aus dem Trichter direkt unter dem Reader. */
@@ -238,87 +226,6 @@ public final class KeycardReaderMod implements ModInitializer {
             }
         }
         ServerPlayNetworking.send(player, new ReaderPayload(true, found));
-    }
-
-    // ------------------------------------------------------------------ Außenanzeige + Piepton
-
-    /**
-     * Sucht Reader um alle Spieler, schickt jedem Spieler die Liste (Lampe + Karten außen am Reader)
-     * und spielt einen Piepton, wenn eine Karte in den Trichter gelegt wurde.
-     */
-    private static void scanReaders(MinecraftServer server, int tick) {
-        List<ServerPlayer> players = server.getPlayerList().getPlayers();
-        Set<UUID> online = new HashSet<>();
-        for (ServerPlayer sp : players) online.add(sp.getUUID());
-        LAST_SENT.keySet().retainAll(online);
-        if (players.isEmpty()) {
-            LAST_HAS_CARD.clear();
-            return;
-        }
-
-        Map<ReaderKey, Scanned> scanned = new HashMap<>();
-        Map<UUID, List<ReaderKey>> perPlayer = new HashMap<>();
-
-        for (ServerPlayer sp : players) {
-            Level level = sp.level();
-            int pcx = sp.blockPosition().getX() >> 4;
-            int pcz = sp.blockPosition().getZ() >> 4;
-            List<ReaderKey> keys = new ArrayList<>();
-            for (int dx = -SCAN_RADIUS_CHUNKS; dx <= SCAN_RADIUS_CHUNKS; dx++) {
-                for (int dz = -SCAN_RADIUS_CHUNKS; dz <= SCAN_RADIUS_CHUNKS; dz++) {
-                    LevelChunk chunk = level.getChunkSource().getChunkNow(pcx + dx, pcz + dz);
-                    if (chunk == null) continue;
-                    for (BlockEntity be : new ArrayList<>(chunk.getBlockEntities().values())) {
-                        if (!(be instanceof DropperBlockEntity d) || !isReader(d)) continue;
-                        BlockPos pos = d.getBlockPos().immutable();
-                        ReaderKey key = new ReaderKey(level.dimension(), pos.asLong());
-                        scanned.computeIfAbsent(key,
-                                k -> new Scanned(level, new ReaderStatusPayload.Entry(pos, codesBelow(level, pos))));
-                        keys.add(key);
-                    }
-                }
-            }
-            perPlayer.put(sp.getUUID(), keys);
-        }
-
-        // Piepton: nur wenn der Reader vorher leer war und jetzt eine Karte enthält.
-        for (Map.Entry<ReaderKey, Scanned> e : scanned.entrySet()) {
-            boolean has = !e.getValue().entry().codes().isEmpty();
-            Boolean before = LAST_HAS_CARD.get(e.getKey());
-            if (ReaderConfig.soundEnabled() && before != null && !before && has) {
-                BlockPos pos = e.getValue().entry().pos();
-                e.getValue().level().playSound(null, pos, BEEP, SoundSource.BLOCKS, 0.6f, 1.6f);
-            }
-        }
-        LAST_HAS_CARD.keySet().retainAll(scanned.keySet());
-        for (Map.Entry<ReaderKey, Scanned> e : scanned.entrySet()) {
-            LAST_HAS_CARD.put(e.getKey(), !e.getValue().entry().codes().isEmpty());
-        }
-
-        // Senden, wenn sich etwas geändert hat (zusätzlich alle 10 s zur Sicherheit).
-        boolean forceResend = tick % 200 == 5;
-        for (ServerPlayer sp : players) {
-            List<ReaderStatusPayload.Entry> list = new ArrayList<>();
-            for (ReaderKey key : perPlayer.get(sp.getUUID())) list.add(scanned.get(key).entry());
-            list.sort(Comparator.comparingLong(en -> en.pos().asLong()));
-            List<ReaderStatusPayload.Entry> previous = LAST_SENT.getOrDefault(sp.getUUID(), List.of());
-            if (forceResend || !list.equals(previous)) {
-                ServerPlayNetworking.send(sp, new ReaderStatusPayload(list));
-                LAST_SENT.put(sp.getUUID(), list);
-            }
-        }
-    }
-
-    /** Bis zu 2 verschiedene Kartencodes aus dem Trichter unter dem Reader. */
-    private static List<String> codesBelow(Level level, BlockPos readerPos) {
-        Set<String> codes = new LinkedHashSet<>();
-        if (level.getBlockEntity(readerPos.below()) instanceof HopperBlockEntity hopper) {
-            for (int i = 0; i < hopper.getContainerSize() && codes.size() < 2; i++) {
-                String code = codeOf(hopper.getItem(i));
-                if (code != null) codes.add(code);
-            }
-        }
-        return new ArrayList<>(codes);
     }
 
     /** Liefert den Kartencode, falls der Stack eine gültige Keycard ist, sonst null. */

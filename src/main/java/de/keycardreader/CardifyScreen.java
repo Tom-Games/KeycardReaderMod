@@ -9,53 +9,41 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.Style;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 import java.util.HashMap;
-import java.util.Locale;
 import java.util.Map;
 
-/**
- * Menü von /cardify: Kartenname (mit Live-Vorschau), Farbe per Klick auf eine Karte
- * oder eigene Hex-Farbe, Spezialcode.
- */
+/** Menü von /cardify: Kartenname, Farbe (Preset-Karte anklicken oder eigene Hex-Farben), Spezialcode. */
 public final class CardifyScreen extends Screen {
-    // Reihenfolge der Farbspalten: Blue, Green, Yellow, Red, Purple, danach "Eigene Farbe" (Hex)
+    // Reihenfolge der Farbspalten: Blue, Green, Yellow, Red, Purple
     private static final String[] COLOR_LETTERS = {"B", "G", "Y", "R", "P"};
     private static final String[] COLOR_NAMES = {"Blau", "Grün", "Gelb", "Rot", "Lila"};
     private static final String[] ROW_LETTERS = {"B", "W"};
     private static final String[] ROW_NAMES = {"Schwarz", "Weiß"};
-    private static final int CUSTOM_COL = 5;
 
     private static final int CONTENT_W = 208;
+    private static final int PANEL_H = 222;
     private static final int BTN = 22;
     private static final int STEP = 26;
-
-    // vertikales Layout (relativ zu "top")
-    private static final int PREVIEW_Y = 16;
-    private static final int NAME_LABEL_Y = 35;
-    private static final int NAME_BOX_Y = 45;
-    private static final int COLOR_LABEL_Y = 70;
-    private static final int ROW0_Y = 83;
-    private static final int HEX_LABEL_Y = 136;
-    private static final int HEX_BOX_Y = 146;
-    private static final int SERIAL_LABEL_Y = 171;
-    private static final int SERIAL_BOX_Y = 181;
-    private static final int BUTTONS_Y = 209;
-    private static final int PANEL_H = 229;
+    private static final int CUSTOM_ROW_Y = 118;
 
     private static final Map<String, ItemStack> ICONS = new HashMap<>();
 
-    private int selRow = 0;
-    private int selCol = 0;
+    /** null = eigene Hex-Farben gewählt, sonst Preset-Code. */
+    private String selectedCode = "KC-B-B";
     private String nameValue = "";
-    private String hexValue = "";
     private String serialValue = "";
+    private String bodyHex = "";
+    private String stripeHex = "";
 
     private EditBox nameBox;
-    private EditBox hexBox;
+    private EditBox bodyBox;
+    private EditBox stripeBox;
     private EditBox serialBox;
     private Button createButton;
     private int left;
@@ -75,34 +63,41 @@ public final class CardifyScreen extends Screen {
         });
     }
 
+    private static ItemStack iconFor(String code) {
+        return ICONS.computeIfAbsent(code, c -> {
+            ItemStack stack = new ItemStack(Items.PAPER);
+            stack.set(DataComponents.ITEM_MODEL, Identifier.fromNamespaceAndPath(
+                    "keycardreader", KeycardReaderMod.CARD_MODELS.get(c)));
+            return stack;
+        });
+    }
+
     private static boolean serialValid(String s) {
         return s.length() >= 4 && s.length() <= 51 && s.matches("[A-Za-z0-9_-]+");
     }
 
-    private String hexDigits() {
-        return hexValue.startsWith("#") ? hexValue.substring(1) : hexValue;
+    private static String clean(String hex) {
+        return hex.startsWith("#") ? hex.substring(1) : hex;
     }
 
-    private boolean hexValid() {
-        return hexDigits().matches("[0-9A-Fa-f]{6}");
+    private static boolean hexOk(String hex) {
+        return clean(hex).matches("[0-9A-Fa-f]{6}");
     }
 
-    /** Aktuell gewählter Code oder null (eigene Farbe gewählt, Hex aber noch ungültig). */
+    private boolean customReady() {
+        return hexOk(bodyHex) && hexOk(stripeHex);
+    }
+
+    /** Aktuell gewählter Code oder null, wenn die eigenen Farben noch unvollständig sind. */
     private String currentCode() {
-        String row = ROW_LETTERS[selRow];
-        if (selCol == CUSTOM_COL) {
-            return hexValid() ? "KC-" + row + "-#" + hexDigits().toUpperCase(Locale.ROOT) : null;
-        }
-        return "KC-" + row + "-" + COLOR_LETTERS[selCol];
+        if (selectedCode != null) return selectedCode;
+        return customReady() ? CardCodes.hexCode(clean(bodyHex), clean(stripeHex)) : null;
     }
 
-    private ItemStack iconFor(int row, int col) {
-        if (col == CUSTOM_COL) {
-            int rgb = hexValid() ? Integer.parseInt(hexDigits(), 16) : 0x808080;
-            return CardCodes.iconStack(row == 0, rgb);
-        }
-        String code = "KC-" + ROW_LETTERS[row] + "-" + COLOR_LETTERS[col];
-        return ICONS.computeIfAbsent(code, CardCodes::iconStack);
+    private ItemStack customIcon() {
+        int body = hexOk(bodyHex) ? Integer.parseInt(clean(bodyHex), 16) : 0x404040;
+        int stripe = hexOk(stripeHex) ? Integer.parseInt(clean(stripeHex), 16) : 0x808080;
+        return CardCodes.hexIcon(body, stripe);
     }
 
     @Override
@@ -111,44 +106,55 @@ public final class CardifyScreen extends Screen {
         left = this.width / 2 - CONTENT_W / 2;
         top = Math.max(2, (this.height - PANEL_H) / 2);
 
-        nameBox = new EditBox(font, left, top + NAME_BOX_Y, CONTENT_W, 20, Component.literal("Kartenname"));
+        nameBox = new EditBox(font, left, top + 28, CONTENT_W, 20, Component.literal("Kartenname"));
         nameBox.setMaxLength(50);
         nameBox.setValue(nameValue);
         nameBox.setResponder(v -> nameValue = v);
         addRenderableWidget(nameBox);
 
         for (int row = 0; row < 2; row++) {
-            for (int col = 0; col <= CUSTOM_COL; col++) {
-                final int r = row;
-                final int c = col;
-                Button b = Button.builder(Component.empty(), btn -> { selRow = r; selCol = c; updateCreateState(); })
+            for (int col = 0; col < 5; col++) {
+                final String code = "KC-" + ROW_LETTERS[row] + "-" + COLOR_LETTERS[col];
+                Button b = Button.builder(Component.empty(), btn -> { selectedCode = code; updateCreateState(); })
                         .bounds(buttonX(col), buttonY(row), BTN, BTN)
                         .build();
-                String tip = col == CUSTOM_COL
-                        ? ROW_NAMES[row] + " – Eigene Farbe (Hex)"
-                        : ROW_NAMES[row] + " – " + COLOR_NAMES[col] + " (KC-" + ROW_LETTERS[row] + "-" + COLOR_LETTERS[col] + ")";
-                b.setTooltip(Tooltip.create(Component.literal(tip)));
+                b.setTooltip(Tooltip.create(Component.literal(
+                        ROW_NAMES[row] + " – " + COLOR_NAMES[col] + " (" + code + ")")));
                 addRenderableWidget(b);
             }
         }
 
-        hexBox = new EditBox(font, left, top + HEX_BOX_Y, 100, 20, Component.literal("Hex-Farbe"));
-        hexBox.setMaxLength(7);
-        hexBox.setValue(hexValue);
-        hexBox.setResponder(v -> {
-            // Nur # und Hex-Zeichen zulassen (ersetzt den entfernten EditBox-Filter)
-            String cleaned = v.replaceAll("[^#0-9A-Fa-f]", "");
-            if (!cleaned.equals(v)) {
-                hexBox.setValue(cleaned); // ruft diesen Responder erneut mit bereinigtem Wert auf
-                return;
-            }
-            hexValue = v;
-            if (hexValid()) selCol = CUSTOM_COL; // gültiger Hex-Wert wählt automatisch "Eigene Farbe"
+        // Zeile "Eigene": Karte anklicken + zwei Hex-Felder (Kartenfarbe, Streifenfarbe)
+        Button custom = Button.builder(Component.empty(), btn -> { selectedCode = null; updateCreateState(); })
+                .bounds(buttonX(0), top + CUSTOM_ROW_Y, BTN, BTN).build();
+        custom.setTooltip(Tooltip.create(Component.literal("Eigene Farben (Hex)")));
+        addRenderableWidget(custom);
+
+        bodyBox = new EditBox(font, left + 82, top + CUSTOM_ROW_Y + 1, 60, 20, Component.literal("Kartenfarbe"));
+        bodyBox.setMaxLength(7);
+        bodyBox.setValue(bodyHex);
+        bodyBox.setResponder(v -> {
+            String c = v.replaceAll("[^#0-9A-Fa-f]", "");
+            if (!c.equals(v)) { bodyBox.setValue(c); return; }
+            bodyHex = v;
+            if (customReady()) selectedCode = null;
             updateCreateState();
         });
-        addRenderableWidget(hexBox);
+        addRenderableWidget(bodyBox);
 
-        serialBox = new EditBox(font, left, top + SERIAL_BOX_Y, CONTENT_W, 20, Component.literal("Spezialcode"));
+        stripeBox = new EditBox(font, left + 148, top + CUSTOM_ROW_Y + 1, 60, 20, Component.literal("Streifenfarbe"));
+        stripeBox.setMaxLength(7);
+        stripeBox.setValue(stripeHex);
+        stripeBox.setResponder(v -> {
+            String c = v.replaceAll("[^#0-9A-Fa-f]", "");
+            if (!c.equals(v)) { stripeBox.setValue(c); return; }
+            stripeHex = v;
+            if (customReady()) selectedCode = null;
+            updateCreateState();
+        });
+        addRenderableWidget(stripeBox);
+
+        serialBox = new EditBox(font, left, top + 164, CONTENT_W, 20, Component.literal("Spezialcode"));
         serialBox.setMaxLength(51);
         serialBox.setValue(serialValue);
         serialBox.setResponder(v -> {
@@ -158,15 +164,16 @@ public final class CardifyScreen extends Screen {
         addRenderableWidget(serialBox);
 
         createButton = Button.builder(Component.literal("Erstellen"), b -> submit())
-                .bounds(left, top + BUTTONS_Y, 100, 20).build();
+                .bounds(left, top + 194, 100, 20).build();
         addRenderableWidget(createButton);
-        addRenderableWidget(Button.builder(Component.literal("Abbrechen"), b -> onClose())
-                .bounds(left + CONTENT_W - 100, top + BUTTONS_Y, 100, 20).build());
+        addRenderableWidget(Button.builder(Component.literal("Abbrechen"),
+                        b -> onClose())
+                .bounds(left + CONTENT_W - 100, top + 194, 100, 20).build());
         updateCreateState();
     }
 
     private int buttonX(int col) { return left + 52 + col * STEP; }
-    private int buttonY(int row) { return top + ROW0_Y + row * STEP; }
+    private int buttonY(int row) { return top + 66 + row * STEP; }
 
     private void updateCreateState() {
         if (createButton != null) createButton.active = serialValid(serialValue) && currentCode() != null;
@@ -179,59 +186,46 @@ public final class CardifyScreen extends Screen {
         onClose();
     }
 
+    private void frame(GuiGraphicsExtractor g, int bx, int by) {
+        int c = 0xFFFFFF55;
+        g.fill(bx - 2, by - 2, bx + BTN + 2, by - 1, c);
+        g.fill(bx - 2, by + BTN + 1, bx + BTN + 2, by + BTN + 2, c);
+        g.fill(bx - 2, by - 2, bx - 1, by + BTN + 2, c);
+        g.fill(bx + BTN + 1, by - 2, bx + BTN + 2, by + BTN + 2, c);
+    }
+
     private void drawOverlay(GuiGraphicsExtractor g) {
         Font font = Minecraft.getInstance().font;
         String title = "Keycard erstellen";
         g.text(font, title, this.width / 2 - font.width(title) / 2, top + 4, 0xFFFFFFFF, true);
-
-        drawPreview(g, font);
-
-        g.text(font, "Kartenname", left, top + NAME_LABEL_Y, 0xFFAAAAAA, false);
-        g.text(font, "Farbe (zum Auswählen anklicken)", left, top + COLOR_LABEL_Y, 0xFFAAAAAA, false);
+        g.text(font, "Kartenname", left, top + 17, 0xFFAAAAAA, false);
+        g.text(font, "Farbe (zum Auswählen anklicken)", left, top + 54, 0xFFAAAAAA, false);
 
         for (int row = 0; row < 2; row++) {
             g.text(font, ROW_NAMES[row], left, buttonY(row) + 7, 0xFFFFFFFF, false);
-            for (int col = 0; col <= CUSTOM_COL; col++) {
+            for (int col = 0; col < 5; col++) {
+                String code = "KC-" + ROW_LETTERS[row] + "-" + COLOR_LETTERS[col];
                 int bx = buttonX(col);
                 int by = buttonY(row);
-                g.item(iconFor(row, col), bx + 3, by + 3);
-                if (row == selRow && col == selCol) {
-                    int c = 0xFFFFFF55;
-                    g.fill(bx - 2, by - 2, bx + BTN + 2, by - 1, c);
-                    g.fill(bx - 2, by + BTN + 1, bx + BTN + 2, by + BTN + 2, c);
-                    g.fill(bx - 2, by - 2, bx - 1, by + BTN + 2, c);
-                    g.fill(bx + BTN + 1, by - 2, bx + BTN + 2, by + BTN + 2, c);
-                }
+                g.item(iconFor(code), bx + 3, by + 3);
+                if (code.equals(selectedCode)) frame(g, bx, by);
             }
         }
 
-        g.text(font, "Eigene Farbe (Hex, z. B. FF8800)", left, top + HEX_LABEL_Y, 0xFFAAAAAA, false);
-        if (!hexValue.isEmpty() && !hexValid()) {
-            String err = "6 Hex-Ziffern";
-            g.text(font, err, left + CONTENT_W - font.width(err), top + HEX_LABEL_Y, 0xFFFF5555, false);
+        // Eigene Farben
+        g.text(font, "Eigene", left, top + CUSTOM_ROW_Y + 7, 0xFFFFFFFF, false);
+        g.item(customIcon(), buttonX(0) + 3, top + CUSTOM_ROW_Y + 3);
+        if (selectedCode == null) frame(g, buttonX(0), top + CUSTOM_ROW_Y);
+        g.text(font, "Karte (Hex)", left + 82, top + CUSTOM_ROW_Y + 26, 0xFFAAAAAA, false);
+        g.text(font, "Streifen (Hex)", left + 148, top + CUSTOM_ROW_Y + 26, 0xFFAAAAAA, false);
+        if ((!bodyHex.isEmpty() && !hexOk(bodyHex)) || (!stripeHex.isEmpty() && !hexOk(stripeHex))) {
+            g.text(font, "Hex: 6 Ziffern, z. B. FF8800", left, top + CUSTOM_ROW_Y + 38, 0xFFFF5555, false);
         }
 
-        g.text(font, "Spezialcode", left, top + SERIAL_LABEL_Y, 0xFFAAAAAA, false);
+        g.text(font, "Spezialcode", left, top + 152, 0xFFAAAAAA, false);
         if (!serialValue.isEmpty() && !serialValid(serialValue)) {
             String err = "4–51 Zeichen: A–Z, 0–9, _ und -";
-            g.text(font, err, left + CONTENT_W - font.width(err), top + SERIAL_LABEL_Y, 0xFFFF5555, false);
+            g.text(font, err, left + CONTENT_W - font.width(err), top + 152, 0xFFFF5555, false);
         }
-    }
-
-    /** Live-Vorschau: gewählte Karte + eingegebener Name in der Kartenfarbe. */
-    private void drawPreview(GuiGraphicsExtractor g, Font font) {
-        String code = currentCode();
-        String shown = nameValue.trim().isEmpty() ? (code != null ? code : "KC-" + ROW_LETTERS[selRow] + "-#??????") : nameValue.trim();
-        Style style = code != null ? CardCodes.nameStyle(code) : Style.EMPTY;
-
-        int maxTextW = CONTENT_W - 24;
-        while (shown.length() > 1 && font.width(shown) > maxTextW) {
-            shown = shown.substring(0, shown.length() - 1);
-        }
-        Component text = Component.literal(shown).withStyle(style);
-        int totalW = 16 + 4 + font.width(text);
-        int x = this.width / 2 - totalW / 2;
-        g.item(iconFor(selRow, selCol), x, top + PREVIEW_Y - 1);
-        g.text(font, text, x + 20, top + PREVIEW_Y + 4, 0xFFFFFFFF, true);
     }
 }

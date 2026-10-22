@@ -10,25 +10,15 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.CustomModelData;
 
 import java.util.List;
-import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Alles rund um Kartencodes.
- * Preset-Codes:  KC-B-B ... KC-W-Y  (Schwarz/Weiß x Blau, Grün, Gelb, Rot, Lila)
- * Hex-Codes:     KC-B-#RRGGBB oder KC-W-#RRGGBB (frei wählbare Farbe)
+ * Kartencodes: Preset (KC-B-B ... KC-W-Y) oder frei gewählte Farben per Hex:
+ * KC-#KARTE-#STREIFEN, z. B. KC-#222222-#FF8800.
  */
 public final class CardCodes {
-    private static final Pattern HEX = Pattern.compile("KC-([BW])-#([0-9A-F]{6})");
-
-    public static final Map<String, String> PRESET_MODELS = Map.ofEntries(
-        Map.entry("KC-B-B", "kc-b-b"), Map.entry("KC-B-G", "kc-b-g"),
-        Map.entry("KC-B-P", "kc-b-p"), Map.entry("KC-B-R", "kc-b-r"),
-        Map.entry("KC-B-Y", "kc-b-y"), Map.entry("KC-W-B", "kc-w-b"),
-        Map.entry("KC-W-G", "kc-w-g"), Map.entry("KC-W-P", "kc-w-p"),
-        Map.entry("KC-W-R", "kc-w-r"), Map.entry("KC-W-Y", "kc-w-y")
-    );
+    private static final Pattern HEX = Pattern.compile("KC-#([0-9A-F]{6})-#([0-9A-F]{6})");
 
     private CardCodes() {}
 
@@ -37,64 +27,48 @@ public final class CardCodes {
     }
 
     public static boolean isValid(String code) {
-        return code != null && (PRESET_MODELS.containsKey(code) || isHex(code));
+        return code != null && (KeycardReaderMod.CARD_MODELS.containsKey(code) || isHex(code));
     }
 
-    /** Modellname (ohne Namespace) für den Code oder null. */
-    public static String modelOf(String code) {
-        if (code == null) return null;
-        String preset = PRESET_MODELS.get(code);
-        if (preset != null) return preset;
+    public static String hexCode(String body, String stripe) {
+        return "KC-#" + body.toUpperCase() + "-#" + stripe.toUpperCase();
+    }
+
+    private static int group(String code, int g) {
         Matcher m = HEX.matcher(code);
-        if (m.matches()) return "B".equals(m.group(1)) ? "kc-hex-b" : "kc-hex-w";
-        return null;
+        return m.matches() ? Integer.parseInt(m.group(g), 16) : 0x808080;
     }
 
-    /** RGB-Wert einer Hex-Karte (ohne Alpha). Nur aufrufen, wenn isHex(code). */
-    public static int rgbOf(String code) {
-        Matcher m = HEX.matcher(code);
-        if (!m.matches()) return 0x808080;
-        return Integer.parseInt(m.group(2), 16);
-    }
-
-    /** Setzt Modell (und bei Hex-Karten die Farbe) auf den Stack. */
+    /** Setzt Modell (bei Hex-Karten zusätzlich beide Farben) auf den Stack. */
     public static void applyVisual(ItemStack stack, String code) {
-        stack.set(DataComponents.ITEM_MODEL, Identifier.fromNamespaceAndPath("keycardreader", modelOf(code)));
         if (isHex(code)) {
-            stack.set(DataComponents.CUSTOM_MODEL_DATA,
-                    new CustomModelData(List.of(), List.of(), List.of(), List.of(rgbOf(code))));
+            stack.set(DataComponents.ITEM_MODEL, Identifier.fromNamespaceAndPath("keycardreader", "kc-hex"));
+            stack.set(DataComponents.CUSTOM_MODEL_DATA, new CustomModelData(
+                    List.of(), List.of(), List.of(), List.of(group(code, 1), group(code, 2))));
         } else {
+            stack.set(DataComponents.ITEM_MODEL, Identifier.fromNamespaceAndPath(
+                    "keycardreader", KeycardReaderMod.CARD_MODELS.get(code)));
             stack.remove(DataComponents.CUSTOM_MODEL_DATA);
         }
     }
 
-    /** Entfernt alles, was applyVisual gesetzt hat (für /discardify). */
     public static void removeVisual(ItemStack stack) {
         stack.set(DataComponents.ITEM_MODEL, Identifier.fromNamespaceAndPath("minecraft", "paper"));
         stack.remove(DataComponents.CUSTOM_MODEL_DATA);
     }
 
-    /** Icon-Stack für Menüs: Hex-Karte mit beliebiger Farbe. */
-    public static ItemStack iconStack(boolean black, int rgb) {
+    /** Icon für Menüs mit beliebigen Farben. */
+    public static ItemStack hexIcon(int body, int stripe) {
         ItemStack stack = new ItemStack(Items.PAPER);
-        stack.set(DataComponents.ITEM_MODEL,
-                Identifier.fromNamespaceAndPath("keycardreader", black ? "kc-hex-b" : "kc-hex-w"));
-        stack.set(DataComponents.CUSTOM_MODEL_DATA,
-                new CustomModelData(List.of(), List.of(), List.of(), List.of(rgb)));
+        stack.set(DataComponents.ITEM_MODEL, Identifier.fromNamespaceAndPath("keycardreader", "kc-hex"));
+        stack.set(DataComponents.CUSTOM_MODEL_DATA, new CustomModelData(
+                List.of(), List.of(), List.of(), List.of(body, stripe)));
         return stack;
     }
 
-    /** Icon-Stack für einen gültigen Code. */
-    public static ItemStack iconStack(String code) {
-        ItemStack stack = new ItemStack(Items.PAPER);
-        applyVisual(stack, code);
-        return stack;
-    }
-
-    /** Namensfarbe: Preset-Farbe bzw. die gewählte Hex-Farbe. */
+    /** Namensfarbe: Preset-Farbe bzw. bei Hex die Streifenfarbe. */
     public static Style nameStyle(String code) {
-        if (isHex(code)) return Style.EMPTY.withColor(TextColor.fromRgb(rgbOf(code)));
-        if (code == null || code.isEmpty()) return Style.EMPTY.withColor(ChatFormatting.WHITE);
+        if (isHex(code)) return Style.EMPTY.withColor(TextColor.fromRgb(group(code, 2)));
         return Style.EMPTY.withColor(switch (code.charAt(code.length() - 1)) {
             case 'B' -> ChatFormatting.DARK_BLUE;
             case 'G' -> ChatFormatting.DARK_GREEN;

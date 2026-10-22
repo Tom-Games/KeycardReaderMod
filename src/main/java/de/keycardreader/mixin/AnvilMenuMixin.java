@@ -2,9 +2,12 @@ package de.keycardreader.mixin;
 
 import de.keycardreader.CardCodes;
 import de.keycardreader.KeycardReaderMod;
+import net.minecraft.ChatFormatting;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.Style;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.inventory.AnvilMenu;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -14,8 +17,18 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import java.util.Map;
+
 @Mixin(AnvilMenu.class)
 public abstract class AnvilMenuMixin {
+    private static final Map<Character, ChatFormatting> CARD_COLORS = Map.of(
+        'B', ChatFormatting.DARK_BLUE,
+        'G', ChatFormatting.DARK_GREEN,
+        'P', ChatFormatting.DARK_PURPLE,
+        'R', ChatFormatting.DARK_RED,
+        'Y', ChatFormatting.GOLD
+    );
+
     @Inject(method = "createResult", at = @At("TAIL"))
     private void keycardreader$validateAndColorKeycard(CallbackInfo ci) {
         AnvilMenu menu = (AnvilMenu) (Object) this;
@@ -52,7 +65,7 @@ public abstract class AnvilMenuMixin {
         result.set(DataComponents.CUSTOM_DATA, CustomData.of(protectedTag));
         CardCodes.applyVisual(result, code);
 
-        // Keep the chosen name but always force its color to match the card (preset color or hex color).
+        // Name behalten, Farbe immer passend zur Karte erzwingen.
         Component currentName = result.get(DataComponents.CUSTOM_NAME);
         if (currentName == null) currentName = Component.literal(code);
         result.set(DataComponents.CUSTOM_NAME, currentName.copy().withStyle(CardCodes.nameStyle(code)));
